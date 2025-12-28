@@ -2,9 +2,12 @@
 // api/lookup.php
 header('Content-Type: application/json');
 require_once '../includes/db.php';
+require_once '../includes/helpers.php';
 
-$phone = $_GET['phone'] ?? '';
+$rawPhone = $_GET['phone'] ?? '';
+$phone = clean_phone($rawPhone);
 
+// Require at least 10 digits (after cleaning might be 11)
 if (strlen($phone) < 10) {
     echo json_encode(['found' => false]);
     exit;

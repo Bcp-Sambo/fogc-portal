@@ -3,6 +3,7 @@
 session_start();
 header('Content-Type: application/json');
 require_once '../includes/db.php';
+require_once '../includes/helpers.php'; // Load Smart Helpers
 
 // Auth Check (Usher or Admin)
 if (!isset($_SESSION['role'])) {
@@ -14,7 +15,8 @@ if (!isset($_SESSION['role'])) {
 try {
     // 1. Get Input
     $data = $_POST;
-    $phone = $data['phone_number'] ?? $data['phone'] ?? ''; // Accept both for robustness
+    $rawPhone = $data['phone_number'] ?? $data['phone'] ?? ''; // Accept both for robustness
+    $phone = clean_phone($rawPhone); // SMART NORMALIZE
     $firstName = $data['first_name'] ?? '';
     // Handle optional last name if not provided (split name?) or frontend ensures it. 
     // Assuming separated in DB but maybe frontend sends full 'name'.

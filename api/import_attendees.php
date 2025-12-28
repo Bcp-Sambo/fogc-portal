@@ -1,8 +1,11 @@
 <?php
 // api/import_attendees.php
 session_start();
+// Disable Error Display to prevent JSON corruption
+ini_set('display_errors', 0);
 header('Content-Type: application/json');
 require_once '../includes/db.php';
+require_once '../includes/helpers.php';
 
 // Auth Check (Admin only)
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
@@ -37,41 +40,52 @@ try {
     $pdo->beginTransaction();
     $stmt = $pdo->prepare("INSERT IGNORE INTO attendees (phone_number, first_name, last_name, sex, is_member, email, invited_by) VALUES (?, ?, ?, ?, ?, ?, ?)");
 
-    // Skip Header Row?
-    // Let's assume user provides header, so we skip first line if it looks like a header
+    // Determine if first row is header
     $firstRow = fgetcsv($handle);
-    // Simple heuristic: if 'Phone' is in first col, skip. Else rewind.
-    if (stripos($firstRow[0], 'phone') === false && is_numeric(str_replace(['+',' '], '', $firstRow[0]))) {
-         // Doesn't look like header, rewind
-         rewind($handle);
+    if ($firstRow) {
+        $firstCell = strtolower(trim($firstRow[0]));
+        // If first cell looks like a phone number (>3 digits), it's probably data
+        if (preg_match('/[0-9]{3}/', $firstCell)) {
+            rewind($handle);
+        }
+        // Else assume it is "Phone" or similar header, so we skip it.
     }
 
     while (($row = fgetcsv($handle)) !== false) {
-        // Expected Format: Phone, First Name, Last Name, Sex, Is Member (Yes/No), Email, Invited By
-        // Robustness: Only Phone is strictly required unique key.
+        // Skip empty rows
+        if (empty(array_filter($row))) continue;
+
+        // MAPPING: Phone(0), First(1), Last(2), Sex(3), Member(4), Email(5)
         
-        $phone = $row[0] ?? '';
-        // Sanitize Phone
-        $phoneClean = preg_replace('/[^0-9]/', '', $phone);
+        $rawPhone = $row[0] ?? '';
+        $phone = clean_phone($rawPhone); // Use Smart Helper
         
-        if (strlen($phoneClean) < 10) {
+        if (strlen($phone) < 10) {
             $skipped++;
             continue;
         }
 
         $fname = $row[1] ?? 'Unknown';
         $lname = $row[2] ?? '';
-        $sex = $row[3] ?? 'Male'; // Default
-        $isMember = isset($row[4]) && strtolower($row[4]) === 'no' ? 'No' : 'Yes'; // Default Yes if ambiguous
-        $email = $row[5] ?? null;
-        $invitedBy = $row[6] ?? null;
+        $sex = ucfirst(strtolower(trim($row[3] ?? 'Male'))); // Normalize "male"/"Male"
+        
+        // Normalize Member Yes/No
+        $memberRaw = strtolower(trim($row[4] ?? ''));
+        $isMember = ($memberRaw === 'yes' || $memberRaw === 'y') ? 'Yes' : 'No'; 
+        
+        $email = trim($row[5] ?? '');
+        $invitedBy = trim($row[6] ?? '');
+
+        // Convert empty strings to NULL for DB cleanliness
+        if ($email === '') $email = null;
+        if ($invitedBy === '') $invitedBy = null;
 
         $stmt->execute([$phone, $fname, $lname, $sex, $isMember, $email, $invitedBy]);
         
         if ($stmt->rowCount() > 0) {
             $imported++;
         } else {
-            $skipped++; // Duplicate
+            $skipped++; // Duplicate or ignored by INSERT IGNORE
         }
     }
 

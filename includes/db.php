@@ -3,7 +3,15 @@
 
 // Database Credentials
 // UPDATE THESE VALUES TO MATCH YOUR CPANEL DATABASE
+// Environment Awareness
+// Default to REMOTE IP (for Local Development)
 $host = '192.250.229.36';
+
+// If running on the Live URL, switch to localhost
+if (isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'portal.fogc') !== false) {
+    $host = 'localhost';
+}
+
 $dbname = 'bubblebotsol_fogc_portal';
 $user = 'bubblebotsol_fogc_admin';
 $pass = 'DefaultFogcPass@123';
